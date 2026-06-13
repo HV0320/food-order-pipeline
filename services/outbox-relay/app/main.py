@@ -28,7 +28,13 @@ if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL environment variable is not set")
 
 
-redis_client = redis.Redis.from_url(VALKEY_URL, decode_responses=True)
+redis_client = redis.Redis.from_url(
+    VALKEY_URL,
+    decode_responses=True,
+    socket_connect_timeout=5,
+    socket_timeout=15,
+    health_check_interval=30,
+)
 
 
 def get_connection():

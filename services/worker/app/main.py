@@ -5,6 +5,7 @@ import socket
 import time
 from typing import Any
 
+import httpx
 import psycopg
 import redis
 from psycopg.rows import dict_row
@@ -17,8 +18,15 @@ from app.state_machine import get_transition
 DATABASE_URL = os.getenv("DATABASE_URL")
 VALKEY_URL = os.getenv("VALKEY_URL", "redis://valkey:6379/0")
 STREAM_NAME = os.getenv("STREAM_NAME", "order.workflow")
+DEAD_LETTER_STREAM = os.getenv("DEAD_LETTER_STREAM", "order.dead_letter")
 CONSUMER_GROUP = os.getenv("CONSUMER_GROUP", "order-workers")
 CONSUMER_NAME = os.getenv("CONSUMER_NAME", socket.gethostname())
+
+RESTAURANT_BASE_URL = os.getenv("RESTAURANT_BASE_URL", "http://restaurant-sim:8001")
+COURIER_BASE_URL = os.getenv("COURIER_BASE_URL", "http://courier-sim:8002")
+
+MAX_ATTEMPTS = int(os.getenv("MAX_ATTEMPTS", "3"))
+REQUEST_TIMEOUT_SECONDS = float(os.getenv("WORKER_REQUEST_TIMEOUT_SECONDS", "3"))
 
 
 logging.basicConfig(
@@ -40,6 +48,15 @@ redis_client = redis.Redis.from_url(
     socket_timeout=15,
     health_check_interval=30,
 )
+
+
+DOWNSTREAM_BY_EVENT = {
+    "ORDER_PLACED": f"{RESTAURANT_BASE_URL}/restaurant/confirm",
+    "ORDER_CONFIRMED": f"{RESTAURANT_BASE_URL}/restaurant/start-preparation",
+    "ORDER_PREPARING": f"{RESTAURANT_BASE_URL}/restaurant/mark-ready",
+    "ORDER_READY": f"{COURIER_BASE_URL}/courier/assign",
+    "ORDER_OUT_FOR_DELIVERY": f"{COURIER_BASE_URL}/courier/mark-delivered",
+}
 
 
 def get_connection():
@@ -73,12 +90,113 @@ def ensure_consumer_group():
         raise
 
 
-def create_next_outbox_event(
-    cur,
-    order_id: str,
-    next_event_type: str,
-    next_status: str,
-):
+def get_current_status(order_id: str) -> str | None:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT status
+                FROM orders
+                WHERE id = %s;
+                """,
+                (order_id,),
+            )
+
+            row = cur.fetchone()
+
+    if not row:
+        return None
+
+    return row["status"]
+
+
+def call_downstream_once(workflow_event_type: str, order_id: str, attempt: int) -> tuple[bool, str | None]:
+    url = DOWNSTREAM_BY_EVENT.get(workflow_event_type)
+
+    if not url:
+        return True, None
+
+    payload = {
+        "order_id": order_id,
+        "workflow_event_type": workflow_event_type,
+        "attempt": attempt,
+    }
+
+    try:
+        with httpx.Client(timeout=REQUEST_TIMEOUT_SECONDS) as client:
+            response = client.post(url, json=payload)
+
+        if 200 <= response.status_code < 300:
+            logger.info(
+                "downstream_success order_id=%s event_type=%s attempt=%s",
+                order_id,
+                workflow_event_type,
+                attempt,
+            )
+            return True, None
+
+        error_message = f"HTTP {response.status_code}: {response.text[:300]}"
+        logger.warning(
+            "downstream_failed order_id=%s event_type=%s attempt=%s error=%s",
+            order_id,
+            workflow_event_type,
+            attempt,
+            error_message,
+        )
+        return False, error_message
+
+    except httpx.TimeoutException:
+        error_message = "downstream timeout"
+        logger.warning(
+            "downstream_timeout order_id=%s event_type=%s attempt=%s",
+            order_id,
+            workflow_event_type,
+            attempt,
+        )
+        return False, error_message
+
+    except Exception as exc:
+        error_message = f"downstream error: {exc}"
+        logger.warning(
+            "downstream_error order_id=%s event_type=%s attempt=%s error=%s",
+            order_id,
+            workflow_event_type,
+            attempt,
+            error_message,
+        )
+        return False, error_message
+
+
+def call_downstream_with_retries(workflow_event_type: str, order_id: str) -> tuple[bool, str | None, int]:
+    last_error = None
+
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        success, error_message = call_downstream_once(
+            workflow_event_type=workflow_event_type,
+            order_id=order_id,
+            attempt=attempt,
+        )
+
+        if success:
+            return True, None, attempt
+
+        last_error = error_message
+
+        if attempt < MAX_ATTEMPTS:
+            delay_seconds = attempt
+            logger.info(
+                "retrying_downstream order_id=%s event_type=%s attempt=%s next_delay_seconds=%s",
+                order_id,
+                workflow_event_type,
+                attempt,
+                delay_seconds,
+            )
+            time.sleep(delay_seconds)
+
+    return False, last_error or "downstream failed", MAX_ATTEMPTS
+
+
+def create_next_outbox_event(cur, order_id: str, next_event_type: str, next_status: str):
     cur.execute(
         """
         INSERT INTO outbox_events (
@@ -102,14 +220,98 @@ def create_next_outbox_event(
     )
 
 
+def mark_order_failed(
+    order_id: str,
+    workflow_event_type: str,
+    expected_status: str,
+    error_message: str,
+    attempts_used: int,
+) -> str:
+    with get_connection() as conn:
+        with conn.transaction():
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE orders
+                    SET status = 'FAILED',
+                        failed_reason = %s,
+                        updated_at = now()
+                    WHERE id = %s
+                      AND status = %s
+                    RETURNING id;
+                    """,
+                    (
+                        error_message,
+                        order_id,
+                        expected_status,
+                    ),
+                )
+
+                updated_order = cur.fetchone()
+
+                if not updated_order:
+                    logger.info(
+                        "failed_update_stale order_id=%s event_type=%s expected_status=%s",
+                        order_id,
+                        workflow_event_type,
+                        expected_status,
+                    )
+                    return "stale"
+
+                cur.execute(
+                    """
+                    INSERT INTO order_events (
+                        order_id,
+                        event_type,
+                        from_status,
+                        to_status,
+                        metadata_json
+                    )
+                    VALUES (%s, 'ORDER_FAILED', %s, 'FAILED', %s);
+                    """,
+                    (
+                        order_id,
+                        expected_status,
+                        Jsonb(
+                            {
+                                "source": "worker",
+                                "workflow_event_type": workflow_event_type,
+                                "attempts_used": attempts_used,
+                                "error": error_message,
+                            }
+                        ),
+                    ),
+                )
+
+    redis_client.xadd(
+        DEAD_LETTER_STREAM,
+        {
+            "order_id": order_id,
+            "event_type": workflow_event_type,
+            "attempts_used": str(attempts_used),
+            "error": error_message,
+        },
+    )
+
+    logger.error(
+        "order_failed_dead_lettered order_id=%s event_type=%s attempts_used=%s error=%s",
+        order_id,
+        workflow_event_type,
+        attempts_used,
+        error_message,
+    )
+
+    return "failed"
+
+
 def advance_order(order_id: str, workflow_event_type: str, stream_message_id: str) -> str:
     transition = get_transition(workflow_event_type)
 
     if transition is None:
         logger.warning(
-            "unknown_event_type event_type=%s order_id=%s",
-            workflow_event_type,
+            "unknown_event_type order_id=%s event_type=%s",
             order_id,
+            workflow_event_type,
         )
         return "ignored"
 
@@ -117,6 +319,40 @@ def advance_order(order_id: str, workflow_event_type: str, stream_message_id: st
     next_status = transition["next_status"]
     record_event_type = transition["record_event_type"]
     next_event_type = transition["next_event_type"]
+
+    current_status = get_current_status(order_id)
+
+    if current_status is None:
+        logger.warning(
+            "order_not_found order_id=%s event_type=%s",
+            order_id,
+            workflow_event_type,
+        )
+        return "missing"
+
+    if current_status != expected_status:
+        logger.info(
+            "stale_or_duplicate_message order_id=%s event_type=%s expected_status=%s current_status=%s",
+            order_id,
+            workflow_event_type,
+            expected_status,
+            current_status,
+        )
+        return "stale"
+
+    downstream_success, error_message, attempts_used = call_downstream_with_retries(
+        workflow_event_type=workflow_event_type,
+        order_id=order_id,
+    )
+
+    if not downstream_success:
+        return mark_order_failed(
+            order_id=order_id,
+            workflow_event_type=workflow_event_type,
+            expected_status=expected_status,
+            error_message=error_message or "downstream failed",
+            attempts_used=attempts_used,
+        )
 
     with get_connection() as conn:
         with conn.transaction():
@@ -132,7 +368,7 @@ def advance_order(order_id: str, workflow_event_type: str, stream_message_id: st
                         END
                     WHERE id = %s
                       AND status = %s
-                    RETURNING id, status;
+                    RETURNING id;
                     """,
                     (
                         next_status,
@@ -145,33 +381,7 @@ def advance_order(order_id: str, workflow_event_type: str, stream_message_id: st
                 updated_order = cur.fetchone()
 
                 if not updated_order:
-                    cur.execute(
-                        """
-                        SELECT status
-                        FROM orders
-                        WHERE id = %s;
-                        """,
-                        (order_id,),
-                    )
-
-                    current_order = cur.fetchone()
-
-                    if current_order:
-                        logger.info(
-                            "stale_or_duplicate_message order_id=%s event_type=%s expected_status=%s current_status=%s",
-                            order_id,
-                            workflow_event_type,
-                            expected_status,
-                            current_order["status"],
-                        )
-                        return "stale"
-
-                    logger.warning(
-                        "order_not_found order_id=%s event_type=%s",
-                        order_id,
-                        workflow_event_type,
-                    )
-                    return "missing"
+                    return "stale"
 
                 cur.execute(
                     """
@@ -194,6 +404,7 @@ def advance_order(order_id: str, workflow_event_type: str, stream_message_id: st
                                 "source": "worker",
                                 "workflow_event_type": workflow_event_type,
                                 "stream_message_id": stream_message_id,
+                                "attempts_used": attempts_used,
                             }
                         ),
                     ),
@@ -208,13 +419,12 @@ def advance_order(order_id: str, workflow_event_type: str, stream_message_id: st
                     )
 
     logger.info(
-        "advanced_order order_id=%s workflow_event_type=%s record_event_type=%s from_status=%s to_status=%s next_event_type=%s",
+        "advanced_order order_id=%s event_type=%s from_status=%s to_status=%s attempts_used=%s",
         order_id,
         workflow_event_type,
-        record_event_type,
         expected_status,
         next_status,
-        next_event_type,
+        attempts_used,
     )
 
     return "advanced"

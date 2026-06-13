@@ -115,3 +115,91 @@ docker compose exec postgres psql -U orders -d orders -c "SELECT event_type, pub
 ```bash
 docker compose exec valkey valkey-cli XLEN order.workflow
 ```
+
+## Day 3 Scope
+
+Day 3 adds realistic downstream behavior without complex scheduled retries.
+
+Added services:
+
+```text
+restaurant-sim
+courier-sim
+```
+
+The worker now calls downstream systems before advancing order status:
+
+```text
+ORDER_PLACED           -> restaurant /confirm
+ORDER_CONFIRMED        -> restaurant /start-preparation
+ORDER_PREPARING        -> restaurant /mark-ready
+ORDER_READY            -> courier /assign
+ORDER_OUT_FOR_DELIVERY -> courier /mark-delivered
+```
+
+Retry behavior:
+
+```text
+The worker tries each downstream call up to 3 times.
+If all attempts fail, the order is marked FAILED.
+The failed message is published to Valkey stream order.dead_letter.
+```
+
+## Restaurant simulator
+
+Health:
+
+```bash
+curl http://localhost:8001/restaurant/health
+```
+
+Set failure rate:
+
+```bash
+curl -X POST "http://localhost:8001/restaurant/config" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "min_latency_ms": 100,
+    "max_latency_ms": 300,
+    "failure_rate": 0.50,
+    "timeout_rate": 0,
+    "rate_limit_per_second": 100
+  }'
+```
+
+## Courier simulator
+
+Health:
+
+```bash
+curl http://localhost:8002/courier/health
+```
+
+Set failure rate:
+
+```bash
+curl -X POST "http://localhost:8002/courier/config" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "min_latency_ms": 100,
+    "max_latency_ms": 300,
+    "failure_rate": 0.30,
+    "timeout_rate": 0,
+    "rate_limit_per_second": 100,
+    "no_courier_available_rate": 0
+  }'
+```
+
+## Dead-letter stream
+
+Check dead-letter count:
+
+```bash
+docker compose exec valkey valkey-cli XLEN order.dead_letter
+```
+
+Inspect dead-letter messages:
+
+```bash
+docker compose exec valkey valkey-cli XRANGE order.dead_letter - +
+```

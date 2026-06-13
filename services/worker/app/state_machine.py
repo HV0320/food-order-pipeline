@@ -32,8 +32,5 @@ TRANSITIONS_BY_EVENT = {
 }
 
 
-TERMINAL_STATUSES = {"DELIVERED", "CANCELLED", "FAILED"}
-
-
 def get_transition(event_type: str):
     return TRANSITIONS_BY_EVENT.get(event_type)

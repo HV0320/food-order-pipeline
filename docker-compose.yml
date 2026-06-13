@@ -46,12 +46,34 @@ services:
       timeout: 5s
       retries: 5
 
+  restaurant-sim:
+    build: ./services/restaurant-sim
+    container_name: food_order_restaurant_sim
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/restaurant/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  courier-sim:
+    build: ./services/courier-sim
+    container_name: food_order_courier_sim
+    ports:
+      - "8002:8002"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/courier/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   outbox-relay:
     build: ./services/outbox-relay
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://orders:orders@postgres:5432/orders}
       VALKEY_URL: ${VALKEY_URL:-redis://valkey:6379/0}
-      STREAM_NAME: order.workflow
+      STREAM_NAME: ${STREAM_NAME:-order.workflow}
     depends_on:
       postgres:
         condition: service_healthy
@@ -63,12 +85,21 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://orders:orders@postgres:5432/orders}
       VALKEY_URL: ${VALKEY_URL:-redis://valkey:6379/0}
-      STREAM_NAME: order.workflow
-      CONSUMER_GROUP: order-workers
+      STREAM_NAME: ${STREAM_NAME:-order.workflow}
+      DEAD_LETTER_STREAM: ${DEAD_LETTER_STREAM:-order.dead_letter}
+      CONSUMER_GROUP: ${CONSUMER_GROUP:-order-workers}
+      RESTAURANT_BASE_URL: ${RESTAURANT_BASE_URL:-http://restaurant-sim:8001}
+      COURIER_BASE_URL: ${COURIER_BASE_URL:-http://courier-sim:8002}
+      MAX_ATTEMPTS: ${MAX_ATTEMPTS:-3}
+      WORKER_REQUEST_TIMEOUT_SECONDS: ${WORKER_REQUEST_TIMEOUT_SECONDS:-3}
     depends_on:
       postgres:
         condition: service_healthy
       valkey:
+        condition: service_healthy
+      restaurant-sim:
+        condition: service_healthy
+      courier-sim:
         condition: service_healthy
 
 volumes:
