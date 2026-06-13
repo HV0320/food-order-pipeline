@@ -60,3 +60,58 @@ GET  /orders/{order_id}/events
 - GET /orders/{order_id} returns the order.
 - Duplicate requests with the same Idempotency-Key return the same order.
 - PostgreSQL stores orders, order items, events, and idempotency keys.
+
+## Day 2 Scope
+
+Day 2 adds:
+
+- Valkey Streams
+- Outbox event table
+- Outbox relay service
+- Worker service
+- Automatic order lifecycle progression
+
+The current automatic lifecycle is:
+
+```text
+PLACED
+→ CONFIRMED
+→ PREPARING
+→ READY
+→ OUT_FOR_DELIVERY
+→ DELIVERED
+```
+
+## Day 2 services
+
+```text
+postgres
+valkey
+api
+outbox-relay
+worker
+```
+
+## Check containers
+
+```bash
+docker compose ps
+```
+
+## Check order events
+
+```bash
+docker compose exec postgres psql -U orders -d orders -c "SELECT event_type, from_status, to_status FROM order_events ORDER BY id;"
+```
+
+## Check outbox events
+
+```bash
+docker compose exec postgres psql -U orders -d orders -c "SELECT event_type, published_at, stream_message_id FROM outbox_events ORDER BY id;"
+```
+
+## Check Valkey Stream length
+
+```bash
+docker compose exec valkey valkey-cli XLEN order.workflow
+```

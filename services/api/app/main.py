@@ -19,8 +19,8 @@ if not DATABASE_URL:
 
 app = FastAPI(
     title="Food Order Pipeline API",
-    version="0.1.0",
-    description="Day 1 API for creating and reading food-delivery orders.",
+    version="0.2.0",
+    description="Food-delivery order API with outbox event support.",
 )
 
 
@@ -221,6 +221,28 @@ def create_order(
                             ),
                         )
 
+                        cur.execute(
+                            """
+                            INSERT INTO outbox_events (
+                                aggregate_type,
+                                aggregate_id,
+                                event_type,
+                                payload_json
+                            )
+                            VALUES ('order', %s, 'ORDER_PLACED', %s);
+                            """,
+                            (
+                                order_row["id"],
+                                Jsonb(
+                                    {
+                                        "order_id": str(order_row["id"]),
+                                        "client_order_id": order.client_order_id,
+                                        "current_status": "PLACED",
+                                    }
+                                ),
+                            ),
+                        )
+
                     response_body = order_summary_from_row(order_row)
 
                     cur.execute(
@@ -346,7 +368,7 @@ def get_order_events(order_id: UUID):
                     created_at
                 FROM order_events
                 WHERE order_id = %s
-                ORDER BY created_at ASC;
+                ORDER BY id ASC;
                 """,
                 (order_id,),
             )

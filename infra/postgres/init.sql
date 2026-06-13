@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS orders (
     ),
     total_amount NUMERIC(12, 2) NOT NULL CHECK (total_amount >= 0),
     delivery_address JSONB NOT NULL,
+    delivered_at TIMESTAMPTZ,
+    failed_reason TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -49,6 +51,18 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS outbox_events (
+    id BIGSERIAL PRIMARY KEY,
+    aggregate_type TEXT NOT NULL,
+    aggregate_id UUID NOT NULL,
+    event_type TEXT NOT NULL,
+    payload_json JSONB NOT NULL,
+    published_at TIMESTAMPTZ,
+    stream_message_id TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_order_events_order_id ON order_events(order_id);
+CREATE INDEX IF NOT EXISTS idx_outbox_events_unpublished ON outbox_events(id) WHERE published_at IS NULL;
