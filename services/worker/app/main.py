@@ -9,7 +9,7 @@ import psycopg
 import redis
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
-from redis.exceptions import ResponseError
+from redis.exceptions import ResponseError, TimeoutError as RedisTimeoutError
 
 from app.state_machine import get_transition
 
@@ -33,7 +33,13 @@ if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL environment variable is not set")
 
 
-redis_client = redis.Redis.from_url(VALKEY_URL, decode_responses=True)
+redis_client = redis.Redis.from_url(
+    VALKEY_URL,
+    decode_responses=True,
+    socket_connect_timeout=5,
+    socket_timeout=15,
+    health_check_interval=30,
+)
 
 
 def get_connection():
@@ -277,6 +283,10 @@ def run_worker():
                         message_id,
                         result,
                     )
+
+        except RedisTimeoutError:
+            logger.warning("valkey_read_timeout_retrying")
+            time.sleep(1)
 
         except Exception:
             logger.exception("worker_loop_error")
