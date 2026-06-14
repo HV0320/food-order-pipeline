@@ -1,0 +1,201 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, Arial, sans-serif;
+  background: #f5f7fb;
+  color: #1f2937;
+}
+
+.page {
+  padding: 24px;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+h1 {
+  margin: 0 0 8px 0;
+}
+
+p {
+  margin: 0;
+  color: #64748b;
+}
+
+.connection {
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 14px;
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.connection.connected {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+button {
+  border: 0;
+  background: #1f2937;
+  color: white;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+.dangerButton {
+  background: #b91c1c;
+}
+
+.actionMessage {
+  min-height: 24px;
+  margin-bottom: 16px;
+  color: #475569;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.grid.two {
+  grid-template-columns: 1fr 1fr;
+}
+
+.card,
+.panel {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+}
+
+.card.danger {
+  border: 1px solid #fecaca;
+}
+
+.cardTitle {
+  color: #64748b;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.cardValue {
+  font-size: 30px;
+  font-weight: 800;
+}
+
+.hint {
+  color: #64748b;
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+h2 {
+  margin: 0 0 12px 0;
+  font-size: 18px;
+}
+
+.barRow {
+  display: grid;
+  grid-template-columns: 160px 1fr 60px;
+  gap: 10px;
+  align-items: center;
+  margin: 8px 0;
+}
+
+.statusLabel {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.badText {
+  color: #b91c1c;
+}
+
+.barBackground {
+  height: 14px;
+  background: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.barFill {
+  height: 100%;
+  background: #1f2937;
+}
+
+.barCount {
+  text-align: right;
+}
+
+.healthRow {
+  margin: 8px 0;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+th,
+td {
+  border-bottom: 1px solid #e5e7eb;
+  padding: 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  color: #64748b;
+  font-weight: 700;
+}
+
+.empty {
+  color: #64748b;
+}
+
+footer {
+  margin: 32px 0 8px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+@media (max-width: 1000px) {
+  .grid,
+  .grid.two {
+    grid-template-columns: 1fr;
+  }
+
+  header {
+    flex-direction: column;
+  }
+}

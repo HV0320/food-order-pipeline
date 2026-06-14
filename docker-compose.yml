@@ -35,10 +35,18 @@ services:
     container_name: food_order_api
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://orders:orders@postgres:5432/orders}
+      VALKEY_URL: ${VALKEY_URL:-redis://valkey:6379/0}
+      STREAM_NAME: ${STREAM_NAME:-order.workflow}
+      DEAD_LETTER_STREAM: ${DEAD_LETTER_STREAM:-order.dead_letter}
+      CONSUMER_GROUP: ${CONSUMER_GROUP:-order-workers}
+      RESTAURANT_BASE_URL: ${RESTAURANT_BASE_URL:-http://restaurant-sim:8001}
+      COURIER_BASE_URL: ${COURIER_BASE_URL:-http://courier-sim:8002}
     ports:
       - "8000:8000"
     depends_on:
       postgres:
+        condition: service_healthy
+      valkey:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live')"]
@@ -92,6 +100,8 @@ services:
       COURIER_BASE_URL: ${COURIER_BASE_URL:-http://courier-sim:8002}
       MAX_ATTEMPTS: ${MAX_ATTEMPTS:-3}
       WORKER_REQUEST_TIMEOUT_SECONDS: ${WORKER_REQUEST_TIMEOUT_SECONDS:-3}
+      PENDING_IDLE_MS: ${PENDING_IDLE_MS:-15000}
+      PENDING_CHECK_INTERVAL_SECONDS: ${PENDING_CHECK_INTERVAL_SECONDS:-5}
     depends_on:
       postgres:
         condition: service_healthy
@@ -100,6 +110,15 @@ services:
       restaurant-sim:
         condition: service_healthy
       courier-sim:
+        condition: service_healthy
+
+  frontend:
+    build: ./services/frontend
+    container_name: food_order_frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      api:
         condition: service_healthy
 
   loadgen:

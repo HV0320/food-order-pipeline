@@ -28,6 +28,10 @@ COURIER_BASE_URL = os.getenv("COURIER_BASE_URL", "http://courier-sim:8002")
 MAX_ATTEMPTS = int(os.getenv("MAX_ATTEMPTS", "3"))
 REQUEST_TIMEOUT_SECONDS = float(os.getenv("WORKER_REQUEST_TIMEOUT_SECONDS", "3"))
 
+PENDING_IDLE_MS = int(os.getenv("PENDING_IDLE_MS", "15000"))
+PENDING_CHECK_INTERVAL_SECONDS = float(os.getenv("PENDING_CHECK_INTERVAL_SECONDS", "5"))
+PENDING_BATCH_SIZE = int(os.getenv("PENDING_BATCH_SIZE", "10"))
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -454,6 +458,72 @@ def process_message(message_id: str, fields: dict[str, Any]) -> str:
         stream_message_id=message_id,
     )
 
+def handle_message_and_ack(message_id: str, fields: dict[str, Any]) -> str:
+    result = process_message(message_id, fields)
+
+    redis_client.xack(
+        STREAM_NAME,
+        CONSUMER_GROUP,
+        message_id,
+    )
+
+    logger.info(
+        "acked_message message_id=%s result=%s",
+        message_id,
+        result,
+    )
+
+    return result
+
+
+def recover_pending_messages() -> int:
+    try:
+        pending_items = redis_client.xpending_range(
+            STREAM_NAME,
+            CONSUMER_GROUP,
+            "-",
+            "+",
+            PENDING_BATCH_SIZE,
+        )
+    except ResponseError as exc:
+        logger.warning("pending_recovery_skipped error=%s", exc)
+        return 0
+    except Exception as exc:
+        logger.warning("pending_recovery_error error=%s", exc)
+        return 0
+
+    message_ids = []
+
+    for item in pending_items:
+        idle_ms = item.get("time_since_delivered", 0)
+        message_id = item.get("message_id")
+
+        if message_id and idle_ms >= PENDING_IDLE_MS:
+            message_ids.append(message_id)
+
+    if not message_ids:
+        return 0
+
+    claimed_messages = redis_client.xclaim(
+        STREAM_NAME,
+        CONSUMER_GROUP,
+        CONSUMER_NAME,
+        min_idle_time=PENDING_IDLE_MS,
+        message_ids=message_ids,
+    )
+
+    recovered_count = 0
+
+    for message_id, fields in claimed_messages:
+        logger.warning(
+            "recovering_pending_message message_id=%s",
+            message_id,
+        )
+
+        handle_message_and_ack(message_id, fields)
+        recovered_count += 1
+
+    return recovered_count
 
 def run_worker():
     ensure_consumer_group()
@@ -465,8 +535,22 @@ def run_worker():
         CONSUMER_NAME,
     )
 
+    last_pending_check = 0.0
+
     while True:
         try:
+            now = time.monotonic()
+
+            if now - last_pending_check >= PENDING_CHECK_INTERVAL_SECONDS:
+                recovered_count = recover_pending_messages()
+                last_pending_check = now
+
+                if recovered_count:
+                    logger.warning(
+                        "recovered_pending_messages count=%s",
+                        recovered_count,
+                    )
+
             response = redis_client.xreadgroup(
                 groupname=CONSUMER_GROUP,
                 consumername=CONSUMER_NAME,
@@ -480,19 +564,7 @@ def run_worker():
 
             for _stream_name, messages in response:
                 for message_id, fields in messages:
-                    result = process_message(message_id, fields)
-
-                    redis_client.xack(
-                        STREAM_NAME,
-                        CONSUMER_GROUP,
-                        message_id,
-                    )
-
-                    logger.info(
-                        "acked_message message_id=%s result=%s",
-                        message_id,
-                        result,
-                    )
+                    handle_message_and_ack(message_id, fields)
 
         except RedisTimeoutError:
             logger.warning("valkey_read_timeout_retrying")

@@ -386,3 +386,7 @@ def get_order_events(order_id: UUID):
         }
         for row in rows
     ]
+
+from app.dashboard import router as dashboard_router
+
+app.include_router(dashboard_router)
