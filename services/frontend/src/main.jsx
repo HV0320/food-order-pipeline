@@ -126,6 +126,84 @@ function shortTime(value) {
   return new Date(value).toLocaleTimeString();
 }
 
+function formatPercent(value) {
+  if (value === undefined || value === null) return "-";
+  return `${Math.round(Number(value) * 100)}%`;
+}
+
+function formatLatency(config) {
+  if (!config) return "-";
+  return `${config.min_latency_ms ?? "-"}-${config.max_latency_ms ?? "-"} ms`;
+}
+
+function downstreamMode(service, type) {
+  const config = service?.config;
+
+  if (!config) return "unknown";
+
+  const failureRate = Number(config.failure_rate ?? 0);
+  const timeoutRate = Number(config.timeout_rate ?? 0);
+  const noCourierRate = Number(config.no_courier_available_rate ?? 0);
+
+  if (failureRate >= 0.95 || noCourierRate >= 0.95) {
+    return "down-like";
+  }
+
+  if (failureRate > 0 || timeoutRate > 0 || noCourierRate > 0) {
+    return "degraded";
+  }
+
+  return "healthy";
+}
+
+function DownstreamStatus({ title, service, type }) {
+  const config = service?.config || {};
+  const counters = service?.counters || {};
+  const mode = downstreamMode(service, type);
+
+  return (
+    <div className="downstreamCard">
+      <div className="downstreamHeader">
+        <strong>{title}</strong>
+        <span className={`modeBadge ${mode}`}>{mode}</span>
+      </div>
+
+      <div className="downstreamGrid">
+        <div>
+          <span className="smallLabel">Latency</span>
+          <strong>{formatLatency(config)}</strong>
+        </div>
+        <div>
+          <span className="smallLabel">Failure</span>
+          <strong>{formatPercent(config.failure_rate)}</strong>
+        </div>
+        <div>
+          <span className="smallLabel">Timeout</span>
+          <strong>{formatPercent(config.timeout_rate)}</strong>
+        </div>
+        <div>
+          <span className="smallLabel">Rate Limit/sec</span>
+          <strong>{config.rate_limit_per_second ?? "-"}</strong>
+        </div>
+        {type === "courier" ? (
+          <div>
+            <span className="smallLabel">No Courier</span>
+            <strong>{formatPercent(config.no_courier_available_rate)}</strong>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="counterLine">
+        requests: {counters.requests_total ?? "-"} |
+        success: {counters.success_total ?? "-"} |
+        failures: {counters.failures_total ?? "-"} |
+        timeouts: {counters.timeouts_total ?? "-"} |
+        rate-limited: {counters.rate_limited_total ?? "-"}
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [data, setData] = useState(null);
   const [connection, setConnection] = useState("connecting");
@@ -225,23 +303,23 @@ function App() {
         <button onClick={() => createMiniBurst(100)}>Mini Burst: 100 Orders</button>
 
         <button onClick={() => postControl("/control/restaurant/healthy", "restaurant healthy")}>
-          Restaurant Healthy
+          All Restaurants Healthy
         </button>
         <button onClick={() => postControl("/control/restaurant/degraded", "restaurant degraded")}>
-          Restaurant Degraded
+          All Restaurants Degraded
         </button>
         <button className="dangerButton" onClick={() => postControl("/control/restaurant/down", "restaurant down-like")}>
-          Restaurant Down-like
+          All Restaurants Down-like
         </button>
 
         <button onClick={() => postControl("/control/courier/healthy", "courier healthy")}>
-          Courier Healthy
+          Courier Network Healthy
         </button>
         <button onClick={() => postControl("/control/courier/degraded", "courier degraded")}>
-          Courier Degraded
+          Courier Network Degraded
         </button>
         <button className="dangerButton" onClick={() => postControl("/control/courier/down", "courier down-like")}>
-          Courier Down-like
+          Courier Network Down-like
         </button>
       </section>
 
@@ -265,22 +343,20 @@ function App() {
       <section className="grid two">
         <div className="panel">
           <h2>Downstream Health</h2>
-          <div className="healthRow">
-            <strong>Restaurant:</strong> {downstream.restaurant?.status || "unknown"}
-            <span className="hint">
-              requests: {downstream.restaurant?.counters?.requests_total ?? "-"},
-              failures: {downstream.restaurant?.counters?.failures_total ?? "-"},
-              timeouts: {downstream.restaurant?.counters?.timeouts_total ?? "-"}
-            </span>
-          </div>
-          <div className="healthRow">
-            <strong>Courier:</strong> {downstream.courier?.status || "unknown"}
-            <span className="hint">
-              requests: {downstream.courier?.counters?.requests_total ?? "-"},
-              failures: {downstream.courier?.counters?.failures_total ?? "-"},
-              timeouts: {downstream.courier?.counters?.timeouts_total ?? "-"}
-            </span>
-          </div>
+          <p className="panelNote">
+            These controls apply globally to the simulated downstream integration services.
+            Orders still belong to many logical restaurants through restaurant_id.
+          </p>
+          <DownstreamStatus
+            title="Restaurant Integration"
+            type="restaurant"
+            service={downstream.restaurant}
+          />
+          <DownstreamStatus
+            title="Courier Dispatch"
+            type="courier"
+            service={downstream.courier}
+          />
         </div>
 
         <StatusFunnel counts={data?.status_counts || {}} />
@@ -294,7 +370,8 @@ function App() {
           { key: "total_orders", label: "Total" },
           { key: "active_orders", label: "Active" },
           { key: "delivered_orders", label: "Delivered" },
-          { key: "failed_orders", label: "Failed" }
+          { key: "failed_orders", label: "Failed" },
+          { key: "failure_rate_percent", label: "Fail %" }
         ]}
       />
 

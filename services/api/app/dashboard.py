@@ -249,7 +249,14 @@ def get_dashboard_summary() -> dict[str, Any]:
                     COUNT(*) FILTER (WHERE status = 'FAILED') AS failed_orders,
                     COUNT(*) FILTER (
                         WHERE status NOT IN ('DELIVERED', 'CANCELLED', 'FAILED')
-                    ) AS active_orders
+                    ) AS active_orders,
+                    ROUND(
+                        (
+                            100.0 * COUNT(*) FILTER (WHERE status = 'FAILED')
+                            / NULLIF(COUNT(*), 0)
+                        )::numeric,
+                        1
+                    ) AS failure_rate_percent
                 FROM orders
                 GROUP BY restaurant_id
                 ORDER BY total_orders DESC
@@ -263,6 +270,7 @@ def get_dashboard_summary() -> dict[str, Any]:
                     "delivered_orders": row["delivered_orders"],
                     "failed_orders": row["failed_orders"],
                     "active_orders": row["active_orders"],
+                    "failure_rate_percent": float(row["failure_rate_percent"] or 0),
                 }
                 for row in cur.fetchall()
             ]

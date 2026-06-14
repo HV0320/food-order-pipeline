@@ -199,3 +199,67 @@ footer {
     flex-direction: column;
   }
 }
+
+.panelNote {
+  color: #64748b;
+  font-size: 13px;
+  margin: 0 0 12px 0;
+}
+
+.downstreamCard {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: #f8fafc;
+}
+
+.downstreamHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.modeBadge {
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.modeBadge.healthy {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.modeBadge.degraded {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.modeBadge.down-like {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.downstreamGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.smallLabel {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.counterLine {
+  color: #475569;
+  font-size: 13px;
+}
