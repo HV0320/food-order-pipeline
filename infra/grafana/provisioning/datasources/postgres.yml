@@ -1,0 +1,17 @@
+apiVersion: 1
+
+datasources:
+  - name: Food Orders PostgreSQL
+    uid: food-orders-postgres
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    user: orders
+    secureJsonData:
+      password: orders
+    jsonData:
+      database: orders
+      sslmode: disable
+      postgresVersion: 1600
+      timescaledb: false
+    editable: true

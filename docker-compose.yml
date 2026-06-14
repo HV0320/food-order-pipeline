@@ -102,6 +102,33 @@ services:
       courier-sim:
         condition: service_healthy
 
+  loadgen:
+    build: ./services/loadgen
+    container_name: food_order_loadgen
+    ports:
+      - "8089:8089"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana-oss
+    container_name: food_order_grafana
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   valkey_data:
+  grafana_data:
