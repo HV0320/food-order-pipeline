@@ -336,8 +336,9 @@ function App() {
         <Card title="Duplicate Client IDs" value={summary.duplicate_client_order_ids} danger={summary.duplicate_client_order_ids > 0} />
         <Card title="Unpublished Outbox" value={queue.unpublished_outbox_events} />
         <Card title="Pending Stream Messages" value={queue.pending_messages} />
+        <Card title="Consumer Group Lag" value={queue.consumer_group_lag} hint="Estimated unprocessed messages" />
         <Card title="Dead Letter Count" value={queue.dead_letter_count} danger={queue.dead_letter_count > 0} />
-        <Card title="Workflow Stream Length" value={queue.workflow_stream_length} />
+        <Card title="Total Workflow Stream Entries" value={queue.workflow_stream_length} hint="Stream history, not current backlog" />
       </section>
 
       <section className="grid two">

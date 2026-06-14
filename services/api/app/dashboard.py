@@ -71,6 +71,7 @@ def safe_valkey_metrics() -> dict[str, Any]:
         "workflow_stream_length": None,
         "dead_letter_count": None,
         "pending_messages": None,
+        "consumer_group_lag": None,
         "error": None,
     }
 
@@ -92,6 +93,20 @@ def safe_valkey_metrics() -> dict[str, Any]:
             result["pending_messages"] = 0
     except Exception:
         result["pending_messages"] = 0
+
+    try:
+        groups = redis_client.xinfo_groups(STREAM_NAME)
+
+        for group in groups:
+            if group.get("name") == CONSUMER_GROUP:
+                result["consumer_group_lag"] = group.get("lag")
+                break
+
+        if result["consumer_group_lag"] is None:
+            result["consumer_group_lag"] = 0
+
+    except Exception:
+        result["consumer_group_lag"] = 0
 
     return result
 
@@ -321,6 +336,7 @@ def get_dashboard_summary() -> dict[str, Any]:
             "workflow_stream_length": valkey_metrics["workflow_stream_length"],
             "dead_letter_count": valkey_metrics["dead_letter_count"],
             "pending_messages": valkey_metrics["pending_messages"],
+            "consumer_group_lag": valkey_metrics["consumer_group_lag"],
             "unpublished_outbox_events": outbox_row["unpublished_outbox_events"],
             "valkey_error": valkey_metrics["error"],
         },
