@@ -282,6 +282,11 @@ function App() {
   const summary = data?.summary || {};
   const queue = data?.queue || {};
   const downstream = data?.downstream || {};
+  const estimatedPipelineBacklog =
+    queue.estimated_pipeline_backlog ??
+    Number(queue.unpublished_outbox_events || 0) +
+      Number(queue.consumer_group_lag || 0) +
+      Number(queue.pending_messages || 0);
 
   return (
     <div className="page">
@@ -334,6 +339,12 @@ function App() {
         <Card title="Delivered / Min" value={summary.orders_delivered_last_minute} />
         <Card title="Avg Delivery Seconds" value={summary.avg_delivery_seconds} />
         <Card title="Duplicate Client IDs" value={summary.duplicate_client_order_ids} danger={summary.duplicate_client_order_ids > 0} />
+        <Card
+          title="Estimated Pipeline Backlog"
+          value={estimatedPipelineBacklog}
+          hint="Outbox + lag + pending"
+          danger={estimatedPipelineBacklog > 0}
+        />
         <Card title="Unpublished Outbox" value={queue.unpublished_outbox_events} />
         <Card title="Pending Stream Messages" value={queue.pending_messages} />
         <Card title="Consumer Group Lag" value={queue.consumer_group_lag} hint="Estimated unprocessed messages" />

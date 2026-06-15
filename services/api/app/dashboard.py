@@ -338,6 +338,11 @@ def get_dashboard_summary() -> dict[str, Any]:
             "pending_messages": valkey_metrics["pending_messages"],
             "consumer_group_lag": valkey_metrics["consumer_group_lag"],
             "unpublished_outbox_events": outbox_row["unpublished_outbox_events"],
+            "estimated_pipeline_backlog": int(
+                (outbox_row["unpublished_outbox_events"] or 0)
+                + (valkey_metrics.get("consumer_group_lag") or 0)
+                + (valkey_metrics.get("pending_messages") or 0)
+            ),
             "valkey_error": valkey_metrics["error"],
         },
         "downstream": safe_downstream_health(),

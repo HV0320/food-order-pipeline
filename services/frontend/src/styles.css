@@ -2,11 +2,15 @@
   box-sizing: border-box;
 }
 
+:root {
+  color-scheme: dark;
+}
+
 body {
   margin: 0;
   font-family: Inter, Arial, sans-serif;
-  background: #f5f7fb;
-  color: #1f2937;
+  background: #0f172a;
+  color: #e5e7eb;
 }
 
 .page {
@@ -23,24 +27,28 @@ header {
 
 h1 {
   margin: 0 0 8px 0;
+  color: #f8fafc;
+  letter-spacing: -0.03em;
 }
 
 p {
   margin: 0;
-  color: #64748b;
+  color: #94a3b8;
 }
 
 .connection {
   padding: 8px 12px;
   border-radius: 999px;
   font-size: 14px;
-  background: #fee2e2;
-  color: #991b1b;
+  background: #451a1a;
+  color: #fecaca;
+  border: 1px solid #7f1d1d;
 }
 
 .connection.connected {
-  background: #dcfce7;
-  color: #166534;
+  background: #052e16;
+  color: #bbf7d0;
+  border: 1px solid #166534;
 }
 
 .controls {
@@ -51,27 +59,33 @@ p {
 }
 
 button {
-  border: 0;
-  background: #1f2937;
-  color: white;
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #f8fafc;
   padding: 10px 14px;
   border-radius: 8px;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 button:hover {
-  opacity: 0.9;
+  background: #334155;
 }
 
 .dangerButton {
+  background: #991b1b;
+  border-color: #b91c1c;
+}
+
+.dangerButton:hover {
   background: #b91c1c;
 }
 
 .actionMessage {
   min-height: 24px;
   margin-bottom: 16px;
-  color: #475569;
+  color: #cbd5e1;
 }
 
 .grid {
@@ -87,18 +101,20 @@ button:hover {
 
 .card,
 .panel {
-  background: white;
+  background: #111827;
+  border: 1px solid #1f2937;
   border-radius: 12px;
   padding: 16px;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 }
 
 .card.danger {
-  border: 1px solid #fecaca;
+  border: 1px solid #7f1d1d;
+  background: #1f1115;
 }
 
 .cardTitle {
-  color: #64748b;
+  color: #93c5fd;
   font-size: 13px;
   margin-bottom: 8px;
 }
@@ -106,17 +122,25 @@ button:hover {
 .cardValue {
   font-size: 30px;
   font-weight: 800;
+  color: #f8fafc;
 }
 
 .hint {
-  color: #64748b;
+  color: #94a3b8;
   font-size: 12px;
   margin-left: 8px;
+}
+
+.card .hint {
+  display: block;
+  margin-left: 0;
+  margin-top: 6px;
 }
 
 h2 {
   margin: 0 0 12px 0;
   font-size: 18px;
+  color: #f8fafc;
 }
 
 .barRow {
@@ -130,30 +154,99 @@ h2 {
 .statusLabel {
   font-weight: 700;
   font-size: 13px;
+  color: #e5e7eb;
 }
 
 .badText {
-  color: #b91c1c;
+  color: #f87171;
 }
 
 .barBackground {
   height: 14px;
-  background: #e5e7eb;
+  background: #273449;
   border-radius: 999px;
   overflow: hidden;
 }
 
 .barFill {
   height: 100%;
-  background: #1f2937;
+  background: linear-gradient(90deg, #38bdf8, #818cf8);
 }
 
 .barCount {
   text-align: right;
+  color: #cbd5e1;
 }
 
 .healthRow {
   margin: 8px 0;
+}
+
+.panelNote {
+  color: #94a3b8;
+  font-size: 13px;
+  margin: 0 0 12px 0;
+}
+
+.downstreamCard {
+  border: 1px solid #263244;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: #0b1220;
+}
+
+.downstreamHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.modeBadge {
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  background: #334155;
+  color: #e2e8f0;
+}
+
+.modeBadge.healthy {
+  background: #052e16;
+  color: #bbf7d0;
+  border: 1px solid #166534;
+}
+
+.modeBadge.degraded {
+  background: #422006;
+  color: #fde68a;
+  border: 1px solid #92400e;
+}
+
+.modeBadge.down-like {
+  background: #450a0a;
+  color: #fecaca;
+  border: 1px solid #991b1b;
+}
+
+.downstreamGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.smallLabel {
+  display: block;
+  color: #94a3b8;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.counterLine {
+  color: #cbd5e1;
+  font-size: 13px;
 }
 
 .tableWrap {
@@ -168,24 +261,32 @@ table {
 
 th,
 td {
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid #243044;
   padding: 8px;
   text-align: left;
   vertical-align: top;
 }
 
 th {
-  color: #64748b;
-  font-weight: 700;
+  color: #93c5fd;
+  font-weight: 800;
+}
+
+td {
+  color: #e5e7eb;
+}
+
+tr:hover td {
+  background: #0b1220;
 }
 
 .empty {
-  color: #64748b;
+  color: #94a3b8;
 }
 
 footer {
   margin: 32px 0 8px;
-  color: #64748b;
+  color: #94a3b8;
   font-size: 14px;
 }
 
@@ -198,68 +299,4 @@ footer {
   header {
     flex-direction: column;
   }
-}
-
-.panelNote {
-  color: #64748b;
-  font-size: 13px;
-  margin: 0 0 12px 0;
-}
-
-.downstreamCard {
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 12px;
-  margin-bottom: 12px;
-  background: #f8fafc;
-}
-
-.downstreamHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.modeBadge {
-  padding: 4px 8px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
-  background: #e5e7eb;
-  color: #374151;
-}
-
-.modeBadge.healthy {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.modeBadge.degraded {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.modeBadge.down-like {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.downstreamGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.smallLabel {
-  display: block;
-  color: #64748b;
-  font-size: 12px;
-  margin-bottom: 4px;
-}
-
-.counterLine {
-  color: #475569;
-  font-size: 13px;
 }
