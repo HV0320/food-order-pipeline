@@ -300,3 +300,15 @@ footer {
     flex-direction: column;
   }
 }
+
+.smallButton {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  background: #334155;
+  border: 1px solid #475569;
+}
+
+.smallButton:hover {
+  background: #475569;
+}

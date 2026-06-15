@@ -148,6 +148,7 @@ def get_dashboard_summary() -> dict[str, Any]:
                     ) AS active_orders,
                     COUNT(*) FILTER (WHERE status = 'DELIVERED') AS delivered_orders,
                     COUNT(*) FILTER (WHERE status = 'FAILED') AS failed_orders,
+                    COUNT(*) FILTER (WHERE status = 'CANCELLED') AS cancelled_orders,
                     COUNT(*) FILTER (
                         WHERE created_at >= now() - interval '60 seconds'
                     ) AS orders_created_last_minute,
@@ -326,6 +327,7 @@ def get_dashboard_summary() -> dict[str, Any]:
             "active_orders": totals["active_orders"],
             "delivered_orders": totals["delivered_orders"],
             "failed_orders": totals["failed_orders"],
+            "cancelled_orders": totals["cancelled_orders"],
             "orders_created_last_minute": totals["orders_created_last_minute"],
             "orders_delivered_last_minute": totals["orders_delivered_last_minute"],
             "avg_delivery_seconds": float(totals["avg_delivery_seconds"]),

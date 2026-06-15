@@ -13,6 +13,13 @@ const STATUSES = [
   "FAILED"
 ];
 
+const CANCELLABLE_STATUSES = new Set([
+  "PLACED",
+  "CONFIRMED",
+  "PREPARING",
+  "READY"
+]);
+
 const MENU_ITEMS = [
   ["Burger", 9.99],
   ["Pizza", 13.99],
@@ -279,6 +286,28 @@ function App() {
     setActionMessage(`Created mini burst of ${count} orders`);
   }
 
+  async function cancelOrder(orderId) {
+    setActionMessage(`Cancelling order ${orderId}...`);
+
+    const response = await fetch(`/api/orders/${orderId}/cancel`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        reason: "dashboard_cancel"
+      })
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      setActionMessage(`Cancel failed: ${text}`);
+      return;
+    }
+
+    setActionMessage("Order cancellation requested");
+  }
+
   const summary = data?.summary || {};
   const queue = data?.queue || {};
   const downstream = data?.downstream || {};
@@ -335,14 +364,15 @@ function App() {
         <Card title="Active Orders" value={summary.active_orders} />
         <Card title="Delivered" value={summary.delivered_orders} />
         <Card title="Failed" value={summary.failed_orders} danger={summary.failed_orders > 0} />
+        <Card title="Cancelled" value={summary.cancelled_orders} />
         <Card title="Created / Min" value={summary.orders_created_last_minute} />
         <Card title="Delivered / Min" value={summary.orders_delivered_last_minute} />
         <Card title="Avg Delivery Seconds" value={summary.avg_delivery_seconds} />
         <Card title="Duplicate Client IDs" value={summary.duplicate_client_order_ids} danger={summary.duplicate_client_order_ids > 0} />
         <Card
-          title="Estimated Pipeline Backlog"
+          title="Estimated Technical Backlog"
           value={estimatedPipelineBacklog}
-          hint="Outbox + lag + pending"
+          hint="Outbox + lag + pending; may include stale no-op messages"
           danger={estimatedPipelineBacklog > 0}
         />
         <Card title="Unpublished Outbox" value={queue.unpublished_outbox_events} />
@@ -396,7 +426,19 @@ function App() {
           { key: "status", label: "Status" },
           { key: "total_amount", label: "Total" },
           { key: "created_at", label: "Created", render: (row) => shortTime(row.created_at) },
-          { key: "updated_at", label: "Updated", render: (row) => shortTime(row.updated_at) }
+          { key: "updated_at", label: "Updated", render: (row) => shortTime(row.updated_at) },
+          {
+            key: "actions",
+            label: "Action",
+            render: (row) =>
+              CANCELLABLE_STATUSES.has(row.status) ? (
+                <button className="smallButton" onClick={() => cancelOrder(row.order_id)}>
+                  Cancel
+                </button>
+              ) : (
+                "-"
+              )
+          }
         ]}
       />
 

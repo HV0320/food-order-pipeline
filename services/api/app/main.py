@@ -390,3 +390,128 @@ def get_order_events(order_id: UUID):
 from app.dashboard import router as dashboard_router
 
 app.include_router(dashboard_router)
+
+
+class CancelOrderRequest(BaseModel):
+    reason: str = "customer_cancelled"
+
+
+@app.post("/orders/{order_id}/cancel")
+def cancel_order(order_id: UUID, request: CancelOrderRequest | None = None):
+    reason = request.reason if request else "customer_cancelled"
+
+    cancellable_statuses = {
+        "PLACED",
+        "CONFIRMED",
+        "PREPARING",
+        "READY",
+    }
+
+    try:
+        with get_connection() as conn:
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT
+                            id,
+                            client_order_id,
+                            status,
+                            total_amount,
+                            created_at
+                        FROM orders
+                        WHERE id = %s
+                        FOR UPDATE;
+                        """,
+                        (order_id,),
+                    )
+
+                    order_row = cur.fetchone()
+
+                    if not order_row:
+                        raise HTTPException(
+                            status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Order not found.",
+                        )
+
+                    current_status = order_row["status"]
+
+                    if current_status == "CANCELLED":
+                        return {
+                            "order_id": str(order_row["id"]),
+                            "client_order_id": order_row["client_order_id"],
+                            "status": "CANCELLED",
+                            "cancelled": False,
+                            "message": "Order was already cancelled.",
+                        }
+
+                    if current_status not in cancellable_statuses:
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail=(
+                                f"Order cannot be cancelled from status {current_status}. "
+                                "Cancellation is allowed before the order is out for delivery."
+                            ),
+                        )
+
+                    cur.execute(
+                        """
+                        UPDATE orders
+                        SET status = 'CANCELLED',
+                            updated_at = now()
+                        WHERE id = %s
+                          AND status = %s
+                        RETURNING id, client_order_id, status, total_amount, created_at;
+                        """,
+                        (
+                            order_id,
+                            current_status,
+                        ),
+                    )
+
+                    cancelled_order = cur.fetchone()
+
+                    if not cancelled_order:
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail="Order status changed before cancellation could be applied.",
+                        )
+
+                    cur.execute(
+                        """
+                        INSERT INTO order_events (
+                            order_id,
+                            event_type,
+                            from_status,
+                            to_status,
+                            metadata_json
+                        )
+                        VALUES (%s, 'ORDER_CANCELLED', %s, 'CANCELLED', %s);
+                        """,
+                        (
+                            order_id,
+                            current_status,
+                            Jsonb(
+                                {
+                                    "source": "api",
+                                    "reason": reason,
+                                }
+                            ),
+                        ),
+                    )
+
+                    return {
+                        "order_id": str(cancelled_order["id"]),
+                        "client_order_id": cancelled_order["client_order_id"],
+                        "status": cancelled_order["status"],
+                        "cancelled": True,
+                        "message": f"Order cancelled from {current_status}.",
+                    }
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        )
