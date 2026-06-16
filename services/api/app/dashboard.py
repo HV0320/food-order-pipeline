@@ -136,6 +136,138 @@ def safe_downstream_health() -> dict[str, Any]:
     return health
 
 
+
+
+def get_latency_metrics(cur) -> dict[str, Any]:
+    cur.execute(
+        """
+        SELECT
+            COALESCE(
+                ROUND(AVG(EXTRACT(EPOCH FROM delivered_at - created_at))::numeric, 2),
+                0
+            ) AS avg_delivery_seconds,
+            COALESCE(
+                ROUND(
+                    (
+                        percentile_cont(0.95)
+                        WITHIN GROUP (
+                            ORDER BY EXTRACT(EPOCH FROM delivered_at - created_at)
+                        )
+                    )::numeric,
+                    2
+                ),
+                0
+            ) AS p95_delivery_seconds,
+            COUNT(*) AS delivered_samples
+        FROM orders
+        WHERE delivered_at IS NOT NULL;
+        """
+    )
+
+    end_to_end = cur.fetchone()
+
+    cur.execute(
+        """
+        WITH timeline AS (
+            SELECT
+                order_id,
+                to_status AS status,
+                created_at AS entered_at,
+                LEAD(created_at) OVER (
+                    PARTITION BY order_id
+                    ORDER BY created_at, id
+                ) AS left_at
+            FROM order_events
+            WHERE to_status IS NOT NULL
+        ),
+        durations AS (
+            SELECT
+                status,
+                EXTRACT(EPOCH FROM (left_at - entered_at)) AS duration_seconds
+            FROM timeline
+            WHERE left_at IS NOT NULL
+              AND status IN (
+                'PLACED',
+                'CONFIRMED',
+                'PREPARING',
+                'READY',
+                'OUT_FOR_DELIVERY'
+              )
+        )
+        SELECT
+            status,
+            COALESCE(ROUND(AVG(duration_seconds)::numeric, 2), 0) AS avg_seconds,
+            COALESCE(
+                ROUND(
+                    (
+                        percentile_cont(0.95)
+                        WITHIN GROUP (ORDER BY duration_seconds)
+                    )::numeric,
+                    2
+                ),
+                0
+            ) AS p95_seconds,
+            COUNT(*) AS samples
+        FROM durations
+        GROUP BY status
+        ORDER BY
+            CASE status
+                WHEN 'PLACED' THEN 1
+                WHEN 'CONFIRMED' THEN 2
+                WHEN 'PREPARING' THEN 3
+                WHEN 'READY' THEN 4
+                WHEN 'OUT_FOR_DELIVERY' THEN 5
+                ELSE 6
+            END;
+        """
+    )
+
+    stage_rows = cur.fetchall()
+
+    return {
+        "end_to_end": {
+            "avg_delivery_seconds": float(end_to_end["avg_delivery_seconds"] or 0),
+            "p95_delivery_seconds": float(end_to_end["p95_delivery_seconds"] or 0),
+            "delivered_samples": end_to_end["delivered_samples"],
+        },
+        "stage_latency": [
+            {
+                "status": row["status"],
+                "avg_seconds": float(row["avg_seconds"] or 0),
+                "p95_seconds": float(row["p95_seconds"] or 0),
+                "samples": row["samples"],
+            }
+            for row in stage_rows
+        ],
+    }
+
+
+def get_retry_metrics(cur) -> dict[str, Any]:
+    cur.execute(
+        """
+        SELECT
+            COALESCE(
+                SUM(
+                    GREATEST(
+                        ((metadata_json ->> 'attempts_used')::int - 1),
+                        0
+                    )
+                ),
+                0
+            ) AS retry_attempts_total
+        FROM order_events
+        WHERE metadata_json ? 'attempts_used'
+          AND (metadata_json ->> 'attempts_used') ~ '^[0-9]+$';
+        """
+    )
+
+    row = cur.fetchone()
+
+    return {
+        "retry_attempts_total": int(row["retry_attempts_total"] or 0),
+    }
+
+
 def get_dashboard_summary() -> dict[str, Any]:
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -318,6 +450,9 @@ def get_dashboard_summary() -> dict[str, Any]:
                 for row in cur.fetchall()
             ]
 
+            latency_metrics = get_latency_metrics(cur)
+            retry_metrics = get_retry_metrics(cur)
+
     valkey_metrics = safe_valkey_metrics()
 
     return {
@@ -334,6 +469,8 @@ def get_dashboard_summary() -> dict[str, Any]:
             "duplicate_client_order_ids": duplicate_row["duplicate_client_order_ids"],
         },
         "status_counts": status_counts,
+        "latency": latency_metrics,
+        "retry": retry_metrics,
         "queue": {
             "workflow_stream_length": valkey_metrics["workflow_stream_length"],
             "dead_letter_count": valkey_metrics["dead_letter_count"],

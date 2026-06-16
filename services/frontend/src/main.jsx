@@ -311,6 +311,9 @@ function App() {
   const summary = data?.summary || {};
   const queue = data?.queue || {};
   const downstream = data?.downstream || {};
+  const latency = data?.latency || {};
+  const endToEndLatency = latency.end_to_end || {};
+  const retry = data?.retry || {};
   const estimatedPipelineBacklog =
     queue.estimated_pipeline_backlog ??
     Number(queue.unpublished_outbox_events || 0) +
@@ -378,7 +381,6 @@ function App() {
           <Card title="Cancelled" value={summary.cancelled_orders} />
           <Card title="Created / Min" value={summary.orders_created_last_minute} />
           <Card title="Delivered / Min" value={summary.orders_delivered_last_minute} />
-          <Card title="Avg Delivery Seconds" value={summary.avg_delivery_seconds} hint="Placed to delivered" />
         </div>
       </section>
 
@@ -408,6 +410,42 @@ function App() {
 
           <StatusFunnel counts={data?.status_counts || {}} />
         </div>
+      </section>
+
+
+
+      <section className="sectionBlock">
+        <h2 className="sectionHeader">Latency</h2>
+        <p className="sectionDescription">
+          Delivery latency and time spent in each lifecycle stage, calculated from order lifecycle events.
+        </p>
+        <div className="grid">
+          <Card
+            title="Avg Delivery Seconds"
+            value={endToEndLatency.avg_delivery_seconds ?? summary.avg_delivery_seconds}
+            hint="Placed to delivered"
+          />
+          <Card
+            title="P95 Delivery Seconds"
+            value={endToEndLatency.p95_delivery_seconds}
+            hint="Placed to delivered"
+          />
+          <Card
+            title="Delivered Samples"
+            value={endToEndLatency.delivered_samples}
+            hint="Orders included in latency calculation"
+          />
+        </div>
+        <Table
+          title="Stage Latency"
+          rows={latency.stage_latency || []}
+          columns={[
+            { key: "status", label: "Stage" },
+            { key: "avg_seconds", label: "Avg Seconds" },
+            { key: "p95_seconds", label: "P95 Seconds" },
+            { key: "samples", label: "Samples" }
+          ]}
+        />
       </section>
 
       <section className="sectionBlock">
@@ -501,6 +539,12 @@ function App() {
           <Card title="Consumer Group Lag" value={queue.consumer_group_lag} hint="Messages not yet delivered to workers" />
           <Card title="Pending Stream Messages" value={queue.pending_messages} hint="Delivered but not acknowledged" />
           <Card title="Dead Letter Count" value={queue.dead_letter_count} danger={queue.dead_letter_count > 0} />
+          <Card
+            title="Retry Attempts"
+            value={retry.retry_attempts_total}
+            hint="Extra downstream attempts"
+            danger={Number(retry.retry_attempts_total || 0) > 0}
+          />
           <Card title="Duplicate Client IDs" value={summary.duplicate_client_order_ids} danger={summary.duplicate_client_order_ids > 0} />
           <Card title="Total Workflow Stream Entries" value={queue.workflow_stream_length} hint="Stream history, not current backlog" />
         </div>
