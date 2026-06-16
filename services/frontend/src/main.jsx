@@ -331,152 +331,199 @@ function App() {
         </div>
       </header>
 
-      <section className="controls">
-        <button onClick={createDemoOrder}>Create 1 Demo Order</button>
-        <button onClick={() => createMiniBurst(25)}>Mini Burst: 25 Orders</button>
-        <button onClick={() => createMiniBurst(100)}>Mini Burst: 100 Orders</button>
+      <section className="sectionBlock">
+        <h2 className="sectionHeader">Demo Controls</h2>
+        <p className="sectionDescription">
+          Trigger demo orders and change the simulated downstream health profile. For sustained high-volume load, use Locust.
+        </p>
+        <div className="controls">
+          <button onClick={createDemoOrder}>Create 1 Demo Order</button>
+          <button onClick={() => createMiniBurst(25)}>Mini Burst: 25 Orders</button>
+          <button onClick={() => createMiniBurst(100)}>Mini Burst: 100 Orders</button>
 
-        <button onClick={() => postControl("/control/restaurant/healthy", "restaurant healthy")}>
-          All Restaurants Healthy
-        </button>
-        <button onClick={() => postControl("/control/restaurant/degraded", "restaurant degraded")}>
-          All Restaurants Degraded
-        </button>
-        <button className="dangerButton" onClick={() => postControl("/control/restaurant/down", "restaurant down-like")}>
-          All Restaurants Down-like
-        </button>
+          <button onClick={() => postControl("/control/restaurant/healthy", "restaurant healthy")}>
+            All Restaurants Healthy
+          </button>
+          <button onClick={() => postControl("/control/restaurant/degraded", "restaurant degraded")}>
+            All Restaurants Degraded
+          </button>
+          <button className="dangerButton" onClick={() => postControl("/control/restaurant/down", "restaurant down-like")}>
+            All Restaurants Down-like
+          </button>
 
-        <button onClick={() => postControl("/control/courier/healthy", "courier healthy")}>
-          Courier Network Healthy
-        </button>
-        <button onClick={() => postControl("/control/courier/degraded", "courier degraded")}>
-          Courier Network Degraded
-        </button>
-        <button className="dangerButton" onClick={() => postControl("/control/courier/down", "courier down-like")}>
-          Courier Network Down-like
-        </button>
+          <button onClick={() => postControl("/control/courier/healthy", "courier healthy")}>
+            Courier Network Healthy
+          </button>
+          <button onClick={() => postControl("/control/courier/degraded", "courier degraded")}>
+            Courier Network Degraded
+          </button>
+          <button className="dangerButton" onClick={() => postControl("/control/courier/down", "courier down-like")}>
+            Courier Network Down-like
+          </button>
+        </div>
       </section>
 
       <div className="actionMessage">{actionMessage}</div>
 
-      <section className="grid">
-        <Card title="Total Orders" value={summary.total_orders} />
-        <Card title="Active Orders" value={summary.active_orders} />
-        <Card title="Delivered" value={summary.delivered_orders} />
-        <Card title="Failed" value={summary.failed_orders} danger={summary.failed_orders > 0} />
-        <Card title="Cancelled" value={summary.cancelled_orders} />
-        <Card title="Created / Min" value={summary.orders_created_last_minute} />
-        <Card title="Delivered / Min" value={summary.orders_delivered_last_minute} />
-        <Card title="Avg Delivery Seconds" value={summary.avg_delivery_seconds} />
-        <Card title="Duplicate Client IDs" value={summary.duplicate_client_order_ids} danger={summary.duplicate_client_order_ids > 0} />
-        <Card
-          title="Estimated Technical Backlog"
-          value={estimatedPipelineBacklog}
-          hint="Outbox + lag + pending; may include stale no-op messages"
-          danger={estimatedPipelineBacklog > 0}
-        />
-        <Card title="Unpublished Outbox" value={queue.unpublished_outbox_events} />
-        <Card title="Pending Stream Messages" value={queue.pending_messages} />
-        <Card title="Consumer Group Lag" value={queue.consumer_group_lag} hint="Estimated unprocessed messages" />
-        <Card title="Dead Letter Count" value={queue.dead_letter_count} danger={queue.dead_letter_count > 0} />
-        <Card title="Total Workflow Stream Entries" value={queue.workflow_stream_length} hint="Stream history, not current backlog" />
+      <section className="sectionBlock">
+        <h2 className="sectionHeader">Orders Now</h2>
+        <p className="sectionDescription">
+          Business-level view of order flow and current outcomes.
+        </p>
+        <div className="grid">
+          <Card title="Total Orders" value={summary.total_orders} />
+          <Card title="Active Orders" value={summary.active_orders} />
+          <Card title="Delivered" value={summary.delivered_orders} />
+          <Card title="Failed" value={summary.failed_orders} danger={summary.failed_orders > 0} />
+          <Card title="Cancelled" value={summary.cancelled_orders} />
+          <Card title="Created / Min" value={summary.orders_created_last_minute} />
+          <Card title="Delivered / Min" value={summary.orders_delivered_last_minute} />
+          <Card title="Avg Delivery Seconds" value={summary.avg_delivery_seconds} hint="Placed to delivered" />
+        </div>
       </section>
 
-      <section className="grid two">
-        <div className="panel">
-          <h2>Downstream Health</h2>
-          <p className="panelNote">
-            These controls apply globally to the simulated downstream integration services.
-            Orders still belong to many logical restaurants through restaurant_id.
-          </p>
-          <DownstreamStatus
-            title="Restaurant Integration"
-            type="restaurant"
-            service={downstream.restaurant}
+      <section className="sectionBlock">
+        <h2 className="sectionHeader">Lifecycle and Downstream Health</h2>
+        <p className="sectionDescription">
+          Where active orders are in the lifecycle and whether restaurant/courier integrations are healthy.
+        </p>
+        <div className="grid two">
+          <div className="panel">
+            <h2>Downstream Health</h2>
+            <p className="panelNote">
+              These controls apply globally to the simulated downstream integration services.
+              Orders still belong to many logical restaurants through restaurant_id.
+            </p>
+            <DownstreamStatus
+              title="Restaurant Integration"
+              type="restaurant"
+              service={downstream.restaurant}
+            />
+            <DownstreamStatus
+              title="Courier Dispatch"
+              type="courier"
+              service={downstream.courier}
+            />
+          </div>
+
+          <StatusFunnel counts={data?.status_counts || {}} />
+        </div>
+      </section>
+
+      <section className="sectionBlock">
+        <h2 className="sectionHeader">Restaurant Impact</h2>
+        <p className="sectionDescription">
+          Orders are generated across many virtual restaurant IDs. This table shows where volume and failures are concentrated.
+        </p>
+        <Table
+          title="Top Restaurants"
+          rows={data?.restaurant_metrics || []}
+          columns={[
+            { key: "restaurant_id", label: "Restaurant" },
+            { key: "total_orders", label: "Total" },
+            { key: "active_orders", label: "Active" },
+            { key: "delivered_orders", label: "Delivered" },
+            { key: "failed_orders", label: "Failed" },
+            { key: "failure_rate_percent", label: "Fail %" }
+          ]}
+        />
+      </section>
+
+      <section className="sectionBlock">
+        <h2 className="sectionHeader">Investigation</h2>
+        <p className="sectionDescription">
+          Start here when the dashboard shows a spike, slowdown, or failure.
+        </p>
+        <div className="tableGrid">
+          <Table
+            title="Stuck / Slow Active Orders"
+            rows={data?.stuck_orders || []}
+            columns={[
+              { key: "client_order_id", label: "Client Order" },
+              { key: "restaurant_id", label: "Restaurant" },
+              { key: "status", label: "Status" },
+              { key: "updated_at", label: "Updated", render: (row) => shortTime(row.updated_at) }
+            ]}
           />
-          <DownstreamStatus
-            title="Courier Dispatch"
-            type="courier"
-            service={downstream.courier}
+
+          <Table
+            title="Recent Failures"
+            rows={data?.recent_failures || []}
+            columns={[
+              { key: "client_order_id", label: "Client Order" },
+              { key: "restaurant_id", label: "Restaurant" },
+              { key: "status", label: "Status" },
+              { key: "failed_reason", label: "Reason" },
+              { key: "updated_at", label: "Updated", render: (row) => shortTime(row.updated_at) }
+            ]}
           />
         </div>
 
-        <StatusFunnel counts={data?.status_counts || {}} />
+        <Table
+          title="Recent Orders"
+          rows={data?.recent_orders || []}
+          columns={[
+            { key: "client_order_id", label: "Client Order" },
+            { key: "restaurant_id", label: "Restaurant" },
+            { key: "status", label: "Status" },
+            { key: "total_amount", label: "Total" },
+            { key: "created_at", label: "Created", render: (row) => shortTime(row.created_at) },
+            { key: "updated_at", label: "Updated", render: (row) => shortTime(row.updated_at) },
+            {
+              key: "actions",
+              label: "Action",
+              render: (row) =>
+                CANCELLABLE_STATUSES.has(row.status) ? (
+                  <button className="smallButton" onClick={() => cancelOrder(row.order_id)}>
+                    Cancel
+                  </button>
+                ) : (
+                  "-"
+                )
+            }
+          ]}
+        />
       </section>
 
-      <Table
-        title="Top Restaurants"
-        rows={data?.restaurant_metrics || []}
-        columns={[
-          { key: "restaurant_id", label: "Restaurant" },
-          { key: "total_orders", label: "Total" },
-          { key: "active_orders", label: "Active" },
-          { key: "delivered_orders", label: "Delivered" },
-          { key: "failed_orders", label: "Failed" },
-          { key: "failure_rate_percent", label: "Fail %" }
-        ]}
-      />
+      <section className="sectionBlock">
+        <h2 className="sectionHeader">Pipeline Internals</h2>
+        <p className="sectionDescription">
+          Technical queue and correctness signals used when explaining worker scaling, worker crashes, and replay/recovery behavior.
+        </p>
+        <div className="grid">
+          <Card
+            title="Estimated Technical Backlog"
+            value={estimatedPipelineBacklog}
+            hint="Outbox + lag + pending; may include stale no-op messages"
+            danger={estimatedPipelineBacklog > 0}
+          />
+          <Card title="Unpublished Outbox" value={queue.unpublished_outbox_events} />
+          <Card title="Consumer Group Lag" value={queue.consumer_group_lag} hint="Messages not yet delivered to workers" />
+          <Card title="Pending Stream Messages" value={queue.pending_messages} hint="Delivered but not acknowledged" />
+          <Card title="Dead Letter Count" value={queue.dead_letter_count} danger={queue.dead_letter_count > 0} />
+          <Card title="Duplicate Client IDs" value={summary.duplicate_client_order_ids} danger={summary.duplicate_client_order_ids > 0} />
+          <Card title="Total Workflow Stream Entries" value={queue.workflow_stream_length} hint="Stream history, not current backlog" />
+        </div>
+      </section>
 
-      <Table
-        title="Recent Orders"
-        rows={data?.recent_orders || []}
-        columns={[
-          { key: "client_order_id", label: "Client Order" },
-          { key: "restaurant_id", label: "Restaurant" },
-          { key: "status", label: "Status" },
-          { key: "total_amount", label: "Total" },
-          { key: "created_at", label: "Created", render: (row) => shortTime(row.created_at) },
-          { key: "updated_at", label: "Updated", render: (row) => shortTime(row.updated_at) },
-          {
-            key: "actions",
-            label: "Action",
-            render: (row) =>
-              CANCELLABLE_STATUSES.has(row.status) ? (
-                <button className="smallButton" onClick={() => cancelOrder(row.order_id)}>
-                  Cancel
-                </button>
-              ) : (
-                "-"
-              )
-          }
-        ]}
-      />
-
-      <Table
-        title="Stuck / Slow Active Orders"
-        rows={data?.stuck_orders || []}
-        columns={[
-          { key: "client_order_id", label: "Client Order" },
-          { key: "restaurant_id", label: "Restaurant" },
-          { key: "status", label: "Status" },
-          { key: "updated_at", label: "Updated", render: (row) => shortTime(row.updated_at) }
-        ]}
-      />
-
-      <Table
-        title="Recent Failures"
-        rows={data?.recent_failures || []}
-        columns={[
-          { key: "client_order_id", label: "Client Order" },
-          { key: "restaurant_id", label: "Restaurant" },
-          { key: "status", label: "Status" },
-          { key: "failed_reason", label: "Reason" },
-          { key: "updated_at", label: "Updated", render: (row) => shortTime(row.updated_at) }
-        ]}
-      />
-
-      <Table
-        title="Recent Events"
-        rows={data?.recent_events || []}
-        columns={[
-          { key: "client_order_id", label: "Client Order" },
-          { key: "restaurant_id", label: "Restaurant" },
-          { key: "event_type", label: "Event" },
-          { key: "from_status", label: "From" },
-          { key: "to_status", label: "To" },
-          { key: "created_at", label: "Time", render: (row) => shortTime(row.created_at) }
-        ]}
-      />
+      <section className="sectionBlock">
+        <h2 className="sectionHeader">Event Audit Trail</h2>
+        <p className="sectionDescription">
+          Latest lifecycle events written by the API and workers.
+        </p>
+        <Table
+          title="Recent Events"
+          rows={data?.recent_events || []}
+          columns={[
+            { key: "client_order_id", label: "Client Order" },
+            { key: "restaurant_id", label: "Restaurant" },
+            { key: "event_type", label: "Event" },
+            { key: "from_status", label: "From" },
+            { key: "to_status", label: "To" },
+            { key: "created_at", label: "Time", render: (row) => shortTime(row.created_at) }
+          ]}
+        />
+      </section>
 
       <footer>
         For serious dinner-rush load, use Locust on port 8089. Use terminal commands to stop/start/scale workers.
