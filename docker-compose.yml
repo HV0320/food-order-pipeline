@@ -131,6 +131,8 @@ services:
         condition: service_healthy
 
   grafana:
+    profiles:
+      - observability
     image: grafana/grafana-oss
     container_name: food_order_grafana
     ports:

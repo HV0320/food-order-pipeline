@@ -24,7 +24,6 @@ Open:
 | Restaurant simulator docs | http://localhost:8001/docs |
 | Courier simulator docs | http://localhost:8002/docs |
 | Locust load generator | http://localhost:8089 |
-| Grafana, optional | http://localhost:3001 |
 
 Health checks:
 
@@ -69,7 +68,6 @@ Cancellation is rejected once an order is out for delivery, delivered, failed, o
 | `courier-sim` | Simulated flaky courier integration |
 | `frontend` | React + Vite live dashboard and demo controls |
 | `loadgen` | Locust load generator for dinner-rush traffic |
-| `grafana` | Optional SQL/ops dashboard |
 
 ## Dashboard
 
