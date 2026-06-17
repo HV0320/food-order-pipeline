@@ -15,12 +15,12 @@ app = FastAPI(
 
 
 class SimulatorConfig(BaseModel):
-    min_latency_ms: int = Field(default=300, ge=0)
-    max_latency_ms: int = Field(default=1500, ge=0)
-    failure_rate: float = Field(default=0.05, ge=0, le=1)
-    timeout_rate: float = Field(default=0.01, ge=0, le=1)
-    rate_limit_per_second: int = Field(default=30, ge=1)
-    no_courier_available_rate: float = Field(default=0.05, ge=0, le=1)
+    min_latency_ms: int = Field(default=100, ge=0)
+    max_latency_ms: int = Field(default=300, ge=0)
+    failure_rate: float = Field(default=0, ge=0, le=1)
+    timeout_rate: float = Field(default=0, ge=0, le=1)
+    rate_limit_per_second: int = Field(default=100, ge=1)
+    no_courier_available_rate: float = Field(default=0, ge=0, le=1)
 
 
 config = SimulatorConfig()
